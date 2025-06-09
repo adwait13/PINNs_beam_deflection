@@ -13,7 +13,6 @@ The models embed Euler–Bernoulli beam theory into the loss function to ensure 
 
 - `P_point_load` — PINNs implementation for a cantilever beam with a concentrated load at the free end  
 - `linear_distributed_load` — PINNs implementation for a beam with linearly distributed load  
-- `requirements.txt` — Python package dependencies (TensorFlow, NumPy, Matplotlib, etc.)
 
 ---
 
