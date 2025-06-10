@@ -1,4 +1,4 @@
-#a continuous linear load q1 -> q2
+#a uniform linear load q1
 
 import os
 import tensorflow as tf
@@ -16,7 +16,6 @@ os.environ['PYTHONHASHSEED'] = str(seed)
 
 #max deflection give 1.79mm
 q1 = 1e3
-q2 = q1
 L = 1
 E = 70e9
 I = 1e-6
@@ -60,10 +59,8 @@ def ge_loss(x, model):
     
     del tape1, tape2, tape3, tape4 
 
-    rhs = q1 + (q2 - q1) * x /L
-
     # EI (d4 y/ dx4) = q1 + (q2-q1/L) * x
-    return y_xxxx + rhs / (E*I)
+    return y_xxxx + q1 / (E*I)
 
 def loss(model, x, x_bc, y_bc):
     res = ge_loss(x, model) 
@@ -128,7 +125,7 @@ def train_step(model, x, x_bc, y_bc, optimizer):
 
 # Generating training data
 
-x_train = np.linspace(0, L, 500).reshape(-1, 1)
+x_train = np.linspace(0, L, 100).reshape(-1, 1)
 x_train = x_train 
 x_train = tf.convert_to_tensor(x_train, dtype = tf.float64)
 
@@ -153,20 +150,21 @@ optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule)
 
 # Training model
 
-epochs = 2000
+epochs = 5000
 
 for epoch in range(epochs):
+    loss_value = train_step(model, x_train, x_bc, y_bc, optimizer)
 
     if epoch % 100 == 0:
-        loss_value = train_step(model, x_train, x_bc, y_bc, optimizer)
         print(f"Epoch {epoch}: Loss = {loss_value.numpy()}")
+
 
 print('Training complete.')
 
 
 # Predicting solution
 
-x_test = np.linspace(0, L, 500).reshape(-1, 1)
+x_test = np.linspace(0, L, 100).reshape(-1, 1)
 x_test = tf.convert_to_tensor(x_test, dtype = tf.float64)
 y_pred = call_model(model, x_test).numpy()
 
@@ -181,28 +179,5 @@ plt.plot(x_test, y_true, 'r--', label = 'True solution')
 plt.xlabel('x')
 plt.ylabel('Defelction y')
 plt.legend()
-plt.title(f'L = {L}m, E = {E}Pa, q1 = {q1}N, q2 = {q2}N, I = {I}')
+plt.title(f'L = {L}m, E = {E}Pa, q1 = {q1}N, I = {I}')
 plt.show()
-
-'''
-error = np.abs(y_pred - y_true)
-plt.figure()
-plt.plot(x_test, error, label='Absolute Error')
-plt.title('Pointwise Error')
-plt.xlabel('x')
-plt.ylabel('Error')
-plt.grid(True)
-plt.legend()
-plt.show()
-
-y_true_np = y_true.numpy()
-
-mse = mean_squared_error(y_true_np, y_pred_np)
-mae = mean_absolute_error(y_true_np, y_pred_np)
-r2 = r2_score(y_true_np, y_pred_np)
-
-# Print results
-print(f"Mean Squared Error (MSE): {mse:.5f}")
-print(f"Mean Absolute Error (MAE): {mae:.5f}")
-print(f"R² Score: {r2:.5f}")
-'''
