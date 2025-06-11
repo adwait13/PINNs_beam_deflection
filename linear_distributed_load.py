@@ -1,4 +1,4 @@
-#a uniform linear load q1
+#linear load from q1 -> q2
 
 import os
 import tensorflow as tf
@@ -14,11 +14,11 @@ tf.random.set_seed(seed)
 random.seed(seed)
 os.environ['PYTHONHASHSEED'] = str(seed)
 
-#max deflection give 1.79mm
-q1 = 1e3
-L = 1
-E = 70e9
-I = 1e-6
+q1 = 40e3
+q2 = 20e3
+L = 4
+E = 1
+I = 1.006e6
 
 def create_model():
     model = {
@@ -59,8 +59,10 @@ def ge_loss(x, model):
     
     del tape1, tape2, tape3, tape4 
 
+    rhs = q1 + (q2 - q1) * x /L
+
     # EI (d4 y/ dx4) = q1 + (q2-q1/L) * x
-    return y_xxxx + q1 / (E*I)
+    return y_xxxx + rhs / (E*I)
 
 def loss(model, x, x_bc, y_bc):
     res = ge_loss(x, model) 
@@ -125,7 +127,7 @@ def train_step(model, x, x_bc, y_bc, optimizer):
 
 # Generating training data
 
-x_train = np.linspace(0, L, 100).reshape(-1, 1)
+x_train = np.linspace(0, L, 500).reshape(-1, 1)
 x_train = x_train 
 x_train = tf.convert_to_tensor(x_train, dtype = tf.float64)
 
@@ -141,7 +143,7 @@ model = create_model()
 
 lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
     initial_learning_rate = 1e-3,
-    decay_steps = 1000,
+    decay_steps = 3000,
     decay_rate = 0.9
 )
 
@@ -150,34 +152,40 @@ optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule)
 
 # Training model
 
-epochs = 5000
+epochs = 20000
 
 for epoch in range(epochs):
     loss_value = train_step(model, x_train, x_bc, y_bc, optimizer)
+    
+    if loss_value < 1e-7:
+        break
 
     if epoch % 100 == 0:
         print(f"Epoch {epoch}: Loss = {loss_value.numpy()}")
 
+print(f"Epoch {epochs}: Loss = {loss_value.numpy()}")
 
 print('Training complete.')
 
 
 # Predicting solution
 
-x_test = np.linspace(0, L, 100).reshape(-1, 1)
-x_test = tf.convert_to_tensor(x_test, dtype = tf.float64)
-y_pred = call_model(model, x_test).numpy()
+x = np.linspace(0, L, 1000).reshape(-1, 1)
+x = tf.convert_to_tensor(x, dtype = tf.float64)
+y_pred = call_model(model, x).numpy()
 
-y_true = -(q1 * (x_test**2) / (24*E*I)) * (x_test**2 - 4 * L * x_test + 6 * L**2)
-
+y1 = q2 * x**2 / (24 * E * I) * (6 * L**2 - 4 * L * x + x**2)
+y2 = ((q1-q2) * x**2) / (120 * L * E * I) * (10 * L**3 - 10 * L**2 * x + 5 * L * x**2 - x**3)
+y_true = -(y1 + y2)
 
 # Plotting result
 
 plt.figure(figsize=(8, 4))
-plt.plot(x_test, y_pred, 'b-', label = 'PINN solution')
-plt.plot(x_test, y_true, 'r--', label = 'True solution')
+plt.plot(x, y_pred, 'b-', label = 'PINN solution')
+plt.plot(x, y_true, 'r--', label = 'True solution')
 plt.xlabel('x')
-plt.ylabel('Defelction y')
+plt.ylabel('Defelction y (m)')
 plt.legend()
-plt.title(f'L = {L}m, E = {E}Pa, q1 = {q1}N, I = {I}')
+plt.title(f'L = {L}m, E = {E}Pa, q1 = {q1}N, q2 = {q2}N, I = {I}')
 plt.show()
+plt.savefig("deflection_plot.png", dpi=300, bbox_inches='tight')
